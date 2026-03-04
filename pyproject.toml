@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "aliexpress-async-api"
 version = "1.0.0"
 authors = [
-  { name="OfertaChina", email="contato@ofertachina.com" },
+  { name="OfertaChina", email="contato@ofertachina.com.br" },
 ]
 description = "Modern and asynchronous Python client for the AliExpress Open Platform (IOP) Affiliate API."
 readme = "README.md"
@@ -36,8 +36,8 @@ dev = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/oferta-china/aliexpress-async-api"
-"Bug Tracker" = "https://github.com/oferta-china/aliexpress-async-api/issues"
+"Homepage" = "https://github.com/ils15/aliexpress-async-api"
+"Bug Tracker" = "https://github.com/ils15/aliexpress-async-api/issues"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

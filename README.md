@@ -135,7 +135,7 @@ We use `pytest` for testing with **96% code coverage**.
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/oferta-china/aliexpress-async-api.git
+   git clone https://github.com/ils15/aliexpress-async-api.git
    cd aliexpress-async-api
    ```
 
@@ -259,6 +259,6 @@ MIT - See [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- **Issues**: [Report bugs](https://github.com/oferta-china/aliexpress-async-api/issues)
-- **Discussions**: [Ask questions](https://github.com/oferta-china/aliexpress-async-api/discussions)
+- **Issues**: [Report bugs](https://github.com/ils15/aliexpress-async-api/issues)
+- **Discussions**: [Ask questions](https://github.com/ils15/aliexpress-async-api/discussions)
 - **Official Docs**: [AliExpress Developers](https://developers.aliexpress.com)

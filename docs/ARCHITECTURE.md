@@ -121,7 +121,7 @@ V1 MD5 signature as per AliEx spec:
 
 ```bash
 # Clone repository
-git clone https://github.com/oferta-china/aliexpress-async-api.git
+git clone https://github.com/ils15/aliexpress-async-api.git
 cd aliexpress-async-api
 
 # Install with dev dependencies
@@ -281,7 +281,7 @@ The MD5 V1 algorithm is implemented exactly per AliExpress spec:
 
 ## Support & Resources
 
-- **GitHub Issues**: [Report bugs](https://github.com/oferta-china/aliexpress-async-api/issues)
+- **GitHub Issues**: [Report bugs](https://github.com/ils15/aliexpress-async-api/issues)
 - **Official Docs**: [AliExpress Open Platform](https://developers.aliexpress.com)
 - **Examples**: See `tests/` directory for usage patterns
 

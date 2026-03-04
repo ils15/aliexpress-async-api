@@ -8,7 +8,7 @@ Thanks for considering contributing! This document outlines the contribution pro
 
 ```bash
 # Clone the repository
-git clone https://github.com/oferta-china/aliexpress-async-api.git
+git clone https://github.com/ils15/aliexpress-async-api.git
 cd aliexpress-async-api
 
 # Create virtual environment (recommended)
@@ -24,7 +24,7 @@ pre-commit install
 
 ### 2. Before Making Changes
 
-- Check existing [GitHub Issues](https://github.com/oferta-china/aliexpress-async-api/issues)
+- Check existing [GitHub Issues](https://github.com/ils15/aliexpress-async-api/issues)
 - Create an issue for new features before implementing
 - Discuss breaking changes in issues first
 
@@ -325,8 +325,8 @@ Always test:
 
 ## Questions?
 
-- **GitHub Discussions**: [Ask a question](https://github.com/oferta-china/aliexpress-async-api/discussions)
-- **Issues**: [Report bugs](https://github.com/oferta-china/aliexpress-async-api/issues)
+- **GitHub Discussions**: [Ask a question](https://github.com/ils15/aliexpress-async-api/discussions)
+- **Issues**: [Report bugs](https://github.com/ils15/aliexpress-async-api/issues)
 
 ---
 
