@@ -5,7 +5,6 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "aliexpress-async-api"
 version = "1.0.0"
-dynamic = ["version"]  # Updated by scripts/bump_version.py on release
 authors = [
   { name="OfertaChina", email="contato@ofertachina.com" },
 ]
