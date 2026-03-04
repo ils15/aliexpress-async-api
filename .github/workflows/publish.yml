@@ -4,11 +4,6 @@ on:
   push:
     branches:
       - master
-    paths:
-      - 'aliexpress_async_api/**'
-      - 'tests/**'
-      - 'pyproject.toml'
-      - '.github/workflows/publish.yml'
 
 jobs:
   test-and-publish:
