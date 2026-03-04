@@ -50,10 +50,8 @@ jobs:
           COMMIT_MSG=$(git log -1 --pretty=%B)
           echo "GIT_COMMIT_MESSAGE=$COMMIT_MSG" >> $GITHUB_ENV
           
-          # Run version bump script
+          # Run version bump script (writes to $GITHUB_OUTPUT automatically)
           python scripts/bump_version.py
-        env:
-          GITHUB_OUTPUT: ${{ github.output }}
       
       # CHANGELOG GENERATION PHASE
       - name: Generate changelog

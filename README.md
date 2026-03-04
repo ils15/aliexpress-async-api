@@ -1,5 +1,11 @@
 # AliExpress Async API
 
+[![Tests](https://github.com/ils15/aliexpress-async-api/actions/workflows/tests.yml/badge.svg)](https://github.com/ils15/aliexpress-async-api/actions/workflows/tests.yml)
+[![Publish](https://github.com/ils15/aliexpress-async-api/actions/workflows/publish.yml/badge.svg)](https://github.com/ils15/aliexpress-async-api/actions/workflows/publish.yml)
+[![PyPI](https://img.shields.io/pypi/v/aliexpress-async-api.svg)](https://pypi.org/project/aliexpress-async-api/)
+[![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A modern, fast, and 100% asynchronous Python client for the **AliExpress Open Platform (IOP) / Affiliate API**.
 
 This library is a modern replacement for the official `aliexpress-sdk-python`. It natively bypasses the confusing `IncompleteSignature` errors by implementing the exact (but undocumented) V1 MD5 signature algorithm used by AliExpress for `/sync` Affiliate API endpoints, wrapping everything in `aiohttp`.
