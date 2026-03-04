@@ -1,0 +1,114 @@
+name: Publish to PyPI
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'aliexpress_async_api/**'
+      - 'tests/**'
+      - 'pyproject.toml'
+      - '.github/workflows/publish.yml'
+
+jobs:
+  test-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # For full git history
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov pytest-asyncio aiohttp
+          pip install build twine
+      
+      # TEST PHASE
+      - name: Run tests
+        run: |
+          python -m pytest tests/ -v --cov=aliexpress_async_api \
+            --cov-report=xml --cov-report=term-missing
+      
+      - name: Check test coverage
+        run: |
+          coverage report --fail-under=85 || exit 1
+      
+      # VERSION BUMP PHASE
+      - name: Bump version (semantic)
+        id: version
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          # Get commit message
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          echo "GIT_COMMIT_MESSAGE=$COMMIT_MSG" >> $GITHUB_ENV
+          
+          # Run version bump script
+          python scripts/bump_version.py
+        env:
+          GITHUB_OUTPUT: ${{ github.output }}
+      
+      # CHANGELOG GENERATION PHASE
+      - name: Generate changelog
+        if: steps.version.outputs.should_publish == 'true'
+        run: |
+          export VERSION=${{ steps.version.outputs.version }}
+          python scripts/generate_changelog.py
+      
+      # BUILD PHASE
+      - name: Build package
+        run: |
+          python -m build
+      
+      - name: Verify package
+        run: |
+          twine check dist/*
+      
+      # PUBLISH PHASE (only if version was bumped)
+      - name: Publish to PyPI
+        if: steps.version.outputs.should_publish == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+      
+      # GITHUB RELEASE PHASE
+      - name: Create GitHub Release
+        if: steps.version.outputs.should_publish == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          body_path: CHANGELOG.md
+          draft: false
+          prerelease: false
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      # COMMIT VERSION BUMP
+      - name: Commit version bump
+        if: steps.version.outputs.should_publish == 'true'
+        run: |
+          git add pyproject.toml aliexpress_async_api/__init__.py CHANGELOG.md
+          git commit -m "chore(release): v${{ steps.version.outputs.version }}"
+          git push origin master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      # NOTIFICATIONS
+      - name: Publish notification
+        if: steps.version.outputs.should_publish == 'true'
+        run: |
+          echo "✅ Published v${{ steps.version.outputs.version }} to PyPI"
+          echo "📦 Install: pip install aliexpress-async-api==${{ steps.version.outputs.version }}"
