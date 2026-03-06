@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aliexpress-async-api"
-version = "1.0.0"
+version = "1.0.1"
 authors = [
   { name="OfertaChina", email="contato@ofertachina.com.br" },
 ]
@@ -38,6 +38,7 @@ dev = [
 [project.urls]
 "Homepage" = "https://github.com/ils15/aliexpress-async-api"
 "Bug Tracker" = "https://github.com/ils15/aliexpress-async-api/issues"
+"Contact" = "https://ofertachina.com.br/contato"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
