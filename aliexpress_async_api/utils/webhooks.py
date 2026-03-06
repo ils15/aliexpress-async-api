@@ -1,9 +1,11 @@
 """
 Webhook support for async notifications
 """
+import ipaddress
 from dataclasses import dataclass, field
 from typing import Dict, List, Any, Optional
 from enum import Enum
+from urllib.parse import urlparse
 import aiohttp
 import asyncio
 import logging
@@ -44,14 +46,67 @@ class WebhookManager:
         self.webhooks: Dict[str, List[str]] = {}
         self.session: Optional[aiohttp.ClientSession] = None
     
+    def _validate_webhook_url(self, url: str) -> None:
+        """
+        Validate a webhook URL to prevent SSRF attacks.
+
+        Allows only http/https URLs that do not point to localhost,
+        loopback addresses, or private/reserved IP ranges.
+
+        Raises:
+            ValueError: if the URL scheme is unsupported or the host is
+                        a private/reserved/loopback address.
+        """
+        try:
+            parsed = urlparse(url)
+        except Exception:
+            raise ValueError(f"Invalid webhook URL: {url!r}")
+
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError(
+                f"Webhook URL must use http or https, got: {parsed.scheme!r}"
+            )
+
+        hostname = parsed.hostname
+        if not hostname:
+            raise ValueError(f"Webhook URL has no hostname: {url!r}")
+
+        _BLOCKED_HOSTS = {"localhost", "localhost.localdomain", "0.0.0.0", "::1"}
+        if hostname.lower() in _BLOCKED_HOSTS:
+            raise ValueError(
+                f"Webhook URL hostname is not allowed: {hostname!r}"
+            )
+
+        # When the hostname is a literal IP address, reject private/reserved ranges.
+        # (Hostname-based DNS rebinding is not covered here.)
+        try:
+            addr = ipaddress.ip_address(hostname)
+        except ValueError:
+            # Not an IP address — it's a fully-qualified domain name, which is fine.
+            pass
+        else:
+            if (
+                addr.is_private
+                or addr.is_loopback
+                or addr.is_reserved
+                or addr.is_link_local
+            ):
+                raise ValueError(
+                    f"Webhook URL points to a private or reserved address: {hostname!r}"
+                )
+
     def register(self, url: str, events: List[str]) -> None:
         """
         Register webhook URL for events
-        
+
         Args:
-            url: Webhook URL to receive notifications
+            url: Webhook URL to receive notifications (must be a public http/https URL)
             events: List of event names to subscribe to
+
+        Raises:
+            ValueError: if url fails security validation
         """
+        self._validate_webhook_url(url)
         for event in events:
             if event not in self.webhooks:
                 self.webhooks[event] = []

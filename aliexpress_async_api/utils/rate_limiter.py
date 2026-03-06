@@ -13,11 +13,15 @@ class RateLimiter:
     def __init__(self, calls: int = 10, period: float = 60.0):
         """
         Initialize rate limiter
-        
+
         Args:
-            calls: Number of calls allowed
-            period: Time period in seconds
+            calls: Number of calls allowed (must be > 0)
+            period: Time period in seconds (must be > 0)
         """
+        if calls <= 0:
+            raise ValueError("calls must be a positive integer")
+        if period <= 0:
+            raise ValueError("period must be a positive number")
         self.calls = calls
         self.period = period
         self.tokens = calls

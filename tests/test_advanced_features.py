@@ -306,3 +306,72 @@ class TestWebhookIntegration:
         assert WebhookEvent.PRODUCT_FOUND == "product.found"
         assert WebhookEvent.LINK_GENERATED == "link.generated"
         assert WebhookEvent.ERROR_OCCURRED == "error.occurred"
+
+
+# ==================== SECURITY TESTS ====================
+
+class TestWebhookSSRFProtection:
+    """Tests that WebhookManager rejects SSRF-prone URLs"""
+
+    def _manager(self) -> WebhookManager:
+        return WebhookManager()
+
+    # --- valid URLs that must be accepted ---
+    @pytest.mark.parametrize("url", [
+        "https://example.com/hook",
+        "http://example.com/hook",
+        "https://hooks.example.org/events",
+        "https://my-service.io:8080/webhook",
+    ])
+    def test_valid_public_url_accepted(self, url):
+        m = self._manager()
+        m.register(url, ["order.completed"])  # must not raise
+        assert url in m.webhooks["order.completed"]
+
+    # --- URLs that must be rejected ---
+    @pytest.mark.parametrize("url", [
+        "http://localhost/webhook",
+        "http://localhost.localdomain/webhook",
+        "http://127.0.0.1/webhook",
+        "http://127.0.0.2/admin",
+        "http://0.0.0.0/webhook",
+        "http://10.0.0.1/webhook",
+        "http://10.255.255.255/webhook",
+        "http://172.16.0.1/webhook",
+        "http://172.31.255.255/webhook",
+        "http://192.168.1.1/webhook",
+        "http://192.168.0.0/webhook",
+        "http://169.254.169.254/latest/meta-data/",  # AWS metadata service
+        "http://[::1]/webhook",                        # IPv6 loopback
+        "ftp://example.com/webhook",                   # wrong scheme
+        "file:///etc/passwd",                          # file scheme
+        "//example.com/webhook",                       # scheme-relative (empty scheme)
+    ])
+    def test_ssrf_url_rejected(self, url):
+        m = self._manager()
+        with pytest.raises(ValueError):
+            m.register(url, ["order.completed"])
+
+
+class TestRateLimiterValidation:
+    """Tests that RateLimiter rejects invalid construction parameters"""
+
+    def test_zero_calls_raises(self):
+        with pytest.raises(ValueError, match="calls"):
+            RateLimiter(calls=0, period=60.0)
+
+    def test_negative_calls_raises(self):
+        with pytest.raises(ValueError, match="calls"):
+            RateLimiter(calls=-5, period=60.0)
+
+    def test_zero_period_raises(self):
+        with pytest.raises(ValueError, match="period"):
+            RateLimiter(calls=10, period=0.0)
+
+    def test_negative_period_raises(self):
+        with pytest.raises(ValueError, match="period"):
+            RateLimiter(calls=10, period=-1.0)
+
+    def test_valid_params_accepted(self):
+        limiter = RateLimiter(calls=1, period=0.001)
+        assert limiter.calls == 1
