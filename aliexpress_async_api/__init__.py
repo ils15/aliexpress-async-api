@@ -1,6 +1,6 @@
 """AliExpress Async API - Async SDK for AliExpress Open Platform"""
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 __author__ = "GitHub Copilot"
 __license__ = "MIT"
 
