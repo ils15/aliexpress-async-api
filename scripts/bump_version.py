@@ -126,9 +126,10 @@ def main():
     update_version_in_init(new_version)
     
     # Output for GitHub Actions
+    # Note: GitHub Actions conditions compare strings, so use lowercase 'true'/'false'
     with open(os.environ.get("GITHUB_OUTPUT", "/dev/null"), "a") as f:
         f.write(f"version={new_version}\n")
-        f.write(f"should_publish={bump_type != 'none'}\n")
+        f.write(f"should_publish={'true' if bump_type != 'none' else 'false'}\n")
     
     print(f"✅ Version updated to {new_version}")
 
