@@ -28,3 +28,4 @@ coverage.xml
 .coverage
 htmlcov/
 .env
+RELEASE_FLOW.md
