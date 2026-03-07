@@ -113,6 +113,17 @@ jobs:
           git commit -m "chore(release): v${{ steps.version.outputs.version }} [skip ci]"
           git push origin master
 
+      # SYNC MASTER → DEVELOP
+      - name: Sync master back to develop
+        if: steps.version.outputs.should_publish == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git fetch origin develop
+          git checkout develop
+          git merge origin/master --no-edit -m "chore(sync): merge master into develop after release v${{ steps.version.outputs.version }} [skip ci]"
+          git push origin develop
+
       - name: Publish notification
         if: steps.version.outputs.should_publish == 'true'
         run: |
