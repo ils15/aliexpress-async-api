@@ -113,11 +113,12 @@ def update_version_in_init(new_version: str) -> None:
 
 def main():
     """Main entrypoint"""
-    # Get commit message from environment (GitHub Actions)
-    commit_msg = os.environ.get("GIT_COMMIT_MESSAGE", "")
-    
-    # Detect bump type
-    bump_type = detect_bump_type(commit_msg)
+    # Prefer explicit BUMP_TYPE from PR label (set by publish.yml).
+    # Falls back to commit-message heuristic when not provided.
+    bump_type = os.environ.get("BUMP_TYPE", "").lower().strip()
+    if bump_type not in ("major", "minor", "patch", "none"):
+        commit_msg = os.environ.get("GIT_COMMIT_MESSAGE", "")
+        bump_type = detect_bump_type(commit_msg)
     
     # Skip if no version bump needed (release commits avoid the loop)
     if bump_type == "none":
