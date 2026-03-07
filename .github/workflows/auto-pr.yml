@@ -24,21 +24,6 @@ jobs:
       models: read        # GitHub Models API (gpt-4o-mini)
 
     steps:
-      # --- 0. RESOLVE TOKEN ---
-      # Prefer GH_PAT (classic PAT with repo scope) when set.
-      # Falls back to GITHUB_TOKEN — but that requires:
-      #   Settings -> Actions -> General -> "Allow GitHub Actions to create and approve pull requests" = ON
-      - name: Resolve GitHub token
-        id: token
-        run: |
-          if [ -n "${{ secrets.GH_PAT }}" ]; then
-            echo "token=${{ secrets.GH_PAT }}" >> "$GITHUB_OUTPUT"
-            echo "::notice::Using GH_PAT secret for PR operations"
-          else
-            echo "token=${{ secrets.GITHUB_TOKEN }}" >> "$GITHUB_OUTPUT"
-            echo "::notice::Using GITHUB_TOKEN — ensure Allow GitHub Actions to create PRs is enabled in repo settings"
-          fi
-
       # --- 1. CHECKOUT ---
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -52,7 +37,7 @@ jobs:
       # --- 3. ENSURE LABELS EXIST ---
       - name: Ensure PR labels exist
         env:
-          GH_TOKEN: ${{ steps.token.outputs.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh label create "enhancement"     --color "0075ca" --description "New feature or request"   --force 2>/dev/null || true
           gh label create "bug"             --color "d73a4a" --description "Something isn't working"  --force 2>/dev/null || true
@@ -67,7 +52,7 @@ jobs:
       - name: Classify changes (AI + heuristic fallback)
         id: analysis
         env:
-          GH_TOKEN: ${{ steps.token.outputs.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 << 'PYEOF'
           import subprocess, json, urllib.request, os, sys
@@ -210,7 +195,7 @@ jobs:
         id: existing
         if: steps.analysis.outputs.skip == 'false'
         env:
-          GH_TOKEN: ${{ steps.token.outputs.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           NUMBER=$(gh pr list \
             --base master \
@@ -225,7 +210,7 @@ jobs:
         id: create-pr
         if: steps.analysis.outputs.skip == 'false' && steps.existing.outputs.number == ''
         env:
-          GH_TOKEN: ${{ steps.token.outputs.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TITLE="${{ steps.analysis.outputs.emoji }} ${{ steps.analysis.outputs.type }}: ${{ steps.analysis.outputs.latest_commit }}"
           NUMBER=$(gh pr create \
@@ -244,7 +229,7 @@ jobs:
       - name: Update existing PR
         if: steps.analysis.outputs.skip == 'false' && steps.existing.outputs.number != ''
         env:
-          GH_TOKEN: ${{ steps.token.outputs.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TITLE="${{ steps.analysis.outputs.emoji }} ${{ steps.analysis.outputs.type }}: ${{ steps.analysis.outputs.latest_commit }}"
           gh pr edit ${{ steps.existing.outputs.number }} \
@@ -257,7 +242,7 @@ jobs:
       - name: Request Copilot review
         if: steps.analysis.outputs.skip == 'false'
         env:
-          GH_TOKEN: ${{ steps.token.outputs.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR="${{ steps.create-pr.outputs.number || steps.existing.outputs.number }}"
           if [ -n "$PR" ]; then
