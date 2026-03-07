@@ -25,7 +25,7 @@ class RateLimiter:
             raise ValueError("period must be a positive number")
         self.calls = calls
         self.period = period
-        self.tokens = calls
+        self.tokens: float = calls
         self.last_update = time.time()
         self.lock = asyncio.Lock()
 

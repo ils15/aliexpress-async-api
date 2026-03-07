@@ -4,7 +4,7 @@ Retry logic with exponential backoff
 
 import asyncio
 import functools
-from typing import Any, Callable, Tuple, Type
+from typing import Any, Callable, Optional, Tuple, Type
 
 
 class RetryPolicy:
@@ -66,7 +66,7 @@ def retry(
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         async def wrapper(*args, **kwargs) -> Any:
-            last_exception = None
+            last_exception: Optional[BaseException] = None
 
             for attempt in range(policy.max_retries + 1):
                 try:
@@ -80,6 +80,7 @@ def retry(
                     delay = policy.get_delay(attempt)
                     await asyncio.sleep(delay)
 
+            assert last_exception is not None
             raise last_exception
 
         return wrapper

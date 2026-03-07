@@ -140,18 +140,21 @@ class WebhookManager:
 
         if self.session is None:
             self.session = aiohttp.ClientSession()
+        session = self.session
 
         tasks = []
         for url in self.webhooks[event]:
-            tasks.append(self._post_webhook(url, payload))
+            tasks.append(self._post_webhook(url, payload, session))
 
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
-    async def _post_webhook(self, url: str, payload: WebhookPayload) -> None:
+    async def _post_webhook(
+        self, url: str, payload: WebhookPayload, session: aiohttp.ClientSession
+    ) -> None:
         """Post webhook to URL"""
         try:
-            async with self.session.post(
+            async with session.post(
                 url, json=payload.to_dict(), timeout=aiohttp.ClientTimeout(total=10)
             ) as response:
                 if response.status >= 300:

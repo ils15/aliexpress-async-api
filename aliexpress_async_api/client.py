@@ -412,7 +412,7 @@ class AliExpressIOPClient:
     ) -> List[Category]:
         """aliexpress.affiliate.category.get"""
         api_method = "aliexpress.affiliate.category.get"
-        business = {}
+        business: Dict[str, Any] = {}
         raw = await self.request(api_method, business, access_token)
         resp = raw.get("aliexpress_affiliate_category_get_response", {})
         result = resp.get("resp_result", {}).get("result", {})
@@ -431,7 +431,7 @@ class AliExpressIOPClient:
     ) -> List[PromoInfo]:
         """aliexpress.affiliate.featuredpromo.get"""
         api_method = "aliexpress.affiliate.featuredpromo.get"
-        business = {}
+        business: Dict[str, Any] = {}
         raw = await self.request(api_method, business, access_token)
         resp = raw.get("aliexpress_affiliate_featuredpromo_get_response", {})
         result = resp.get("resp_result", {}).get("result", {})

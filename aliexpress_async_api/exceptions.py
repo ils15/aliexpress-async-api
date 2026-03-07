@@ -1,3 +1,6 @@
+from typing import Optional
+
+
 class AliExpressException(Exception):
     """Base exception for all AliExpress API errors."""
 
@@ -19,7 +22,7 @@ class ProductNotFoundException(AliExpressException):
 class APIRequestException(AliExpressException):
     """Raised when the API returns an error response."""
 
-    def __init__(self, message: str, code: str = None, sub_code: str = None):
+    def __init__(self, message: str, code: Optional[str] = None, sub_code: Optional[str] = None):
         self.code = code
         self.sub_code = sub_code
         super().__init__(f"[{code or 'ERROR'}] {message}")
