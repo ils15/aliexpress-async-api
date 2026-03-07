@@ -1,10 +1,13 @@
 name: Auto Release PR (develop -> master)
 
 # Triggered on every push to develop.
-# 1. Inspects commits since last master sync
-# 2. Skips if there is nothing significant (only docs/test/chore)
-# 3. Creates (or updates) a PR develop -> master, labelled by change type
-# 4. Requests a Copilot code review on the PR
+# 1. Reads the actual code diff since last master sync
+# 2. Calls GitHub Models API (gpt-4o-mini) to classify the change type
+# 3. Falls back to file-pattern heuristic if AI is unavailable
+# 4. Skips if only docs/tests/CI changed (nothing publishable)
+# 5. Creates (or updates) a PR develop -> master with label + full commit list
+# 6. Posts a comment with @iris / @temis agent instructions
+# NO conventional commit format required in commit messages.
 
 on:
   push:
@@ -18,6 +21,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      models: read        # GitHub Models API (gpt-4o-mini)
 
     steps:
       # --- 1. CHECKOUT ---
@@ -44,92 +48,147 @@ jobs:
           gh label create "chore"           --color "ffffff" --description "CI / build changes"       --force 2>/dev/null || true
           gh label create "auto-pr"         --color "ededed" --description "Auto-generated PR"        --force 2>/dev/null || true
 
-      # --- 4. ANALYZE COMMITS ---
-      - name: Analyze commits since master
+      # --- 4. AI-POWERED CHANGE CLASSIFICATION ---
+      - name: Classify changes (AI + heuristic fallback)
         id: analysis
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          COMMITS=$(git log origin/master..HEAD --pretty=format:"%s" 2>/dev/null || \
-                    git log --oneline -15 --pretty=format:"%s")
+          python3 << 'PYEOF'
+          import subprocess, json, urllib.request, os, sys
 
-          # Nothing to release if no commits differ from master
-          if [ -z "$COMMITS" ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+          def git(*args):
+              return subprocess.run(['git'] + list(args), capture_output=True, text=True).stdout.strip()
 
-          # Count significant commits (feat / fix / refactor only)
-          SIG=$(echo "$COMMITS" | grep -cE "^(feat|fix|refactor)(\(.+\))?(!)?:" 2>/dev/null || true)
-          if [ "${SIG:-0}" -eq 0 ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+          def out(k, v):
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write(f"{k}={v}\n")
 
-          echo "skip=false" >> "$GITHUB_OUTPUT"
+          # ---- Files changed since master ----
+          all_files = git('diff', 'origin/master..HEAD', '--name-only').splitlines()
+          if not all_files:
+              out('skip', 'true'); sys.exit(0)
 
-          # -- Determine highest-priority change type --
-          if echo "$COMMITS" | grep -qE "BREAKING[[:space:]]CHANGE|(feat|fix)!:"; then
-            TYPE="feat"
-            LABEL="breaking-change"
-            EMOJI="💥"
-            BUMP="MAJOR"
-          elif echo "$COMMITS" | grep -qE "^feat(\(.+\))?:"; then
-            TYPE="feat"
-            LABEL="enhancement"
-            EMOJI="✨"
-            BUMP="MINOR"
-          elif echo "$COMMITS" | grep -qE "^fix(\(.+\))?:"; then
-            TYPE="fix"
-            LABEL="bug"
-            EMOJI="🐛"
-            BUMP="PATCH"
-          else
-            TYPE="refactor"
-            LABEL="refactor"
-            EMOJI="♻️"
-            BUMP="PATCH"
-          fi
+          # Publishable = anything that is not tests / docs / CI
+          boring = lambda f: (
+              any(f.startswith(p) for p in ['tests/', 'docs/', '.github/'])
+              or f.endswith(('.md', '.txt', '.rst', '.cfg'))
+          )
+          sig_files = [f for f in all_files if not boring(f)]
+          if not sig_files:
+              out('skip', 'true'); sys.exit(0)
 
-          echo "type=$TYPE"   >> "$GITHUB_OUTPUT"
-          echo "label=$LABEL" >> "$GITHUB_OUTPUT"
-          echo "emoji=$EMOJI" >> "$GITHUB_OUTPUT"
-          echo "bump=$BUMP"   >> "$GITHUB_OUTPUT"
+          out('skip', 'false')
 
-          # Latest commit message as PR title base
-          LATEST=$(git log -1 --pretty=format:"%s")
-          echo "latest_commit=${LATEST}" >> "$GITHUB_OUTPUT"
+          commits  = git('log', 'origin/master..HEAD', '--pretty=format:%s')
+          diff_code = git('diff', 'origin/master..HEAD', '--unified=2', '--', *sig_files[:10])[:5000]
 
-          # -- Build PR body and write to file --
-          COMMIT_COUNT=$(git log origin/master..HEAD --oneline | wc -l)
+          # ---- GitHub Models API (gpt-4o-mini) ----
+          ai_type = None
+          source  = 'heuristic'
+          token   = os.environ.get('GH_TOKEN', '')
 
-          cat > /tmp/pr_body.md << BODY_EOF
-          ## ${EMOJI} Automated Release PR: \`develop\` → \`master\`
+          system_prompt = (
+              "You are a semantic versioning classifier. "
+              "Analyze the git diff and respond with EXACTLY ONE WORD:\n"
+              "- feat     new public endpoint, class, or user-visible feature\n"
+              "- fix      bug fixed, wrong behaviour patched\n"
+              "- refactor internal restructuring, no change to public API\n"
+              "- breaking existing public API removed, renamed, or signature changed\n"
+              "- docs     only docs, tests, or CI files changed\n"
+              "One lowercase word. No punctuation."
+          )
+          user_msg = (
+              f"Changed files: {', '.join(sig_files[:20])}\n\n"
+              f"Commits: {commits[:400]}\n\n"
+              f"Diff:\n{diff_code}"
+          )
+          payload = json.dumps({
+              "model": "gpt-4o-mini",
+              "messages": [
+                  {"role": "system", "content": system_prompt},
+                  {"role": "user",   "content": user_msg}
+              ],
+              "max_tokens": 5,
+              "temperature": 0
+          }).encode()
 
-          > Auto-generated by CI. Review, approve, and merge to publish to PyPI.
+          try:
+              req = urllib.request.Request(
+                  'https://models.inference.ai.azure.com/chat/completions',
+                  data=payload,
+                  headers={'Authorization': f'Bearer {token}',
+                           'Content-Type': 'application/json'},
+                  method='POST'
+              )
+              with urllib.request.urlopen(req, timeout=15) as resp:
+                  body = json.loads(resp.read())
+                  candidate = body['choices'][0]['message']['content'].strip().lower().split()[0]
+                  if candidate in ('feat', 'fix', 'refactor', 'breaking', 'docs'):
+                      ai_type = candidate
+                      source  = 'AI (gpt-4o-mini)'
+                      print(f'::notice::AI classified change as: {ai_type}')
+          except Exception as e:
+              print(f'::warning::AI classification unavailable ({e}), using heuristic')
 
-          ---
+          # ---- Heuristic fallback ----
+          if not ai_type:
+              new_pkg = git('diff', 'origin/master..HEAD', '--diff-filter=A', '--name-only').splitlines()
+              new_pkg = [f for f in new_pkg if not boring(f)]
+              ai_type = 'feat' if new_pkg else 'fix'
 
-          ### Summary
-          | | |
-          |---|---|
-          | Change type | \`${TYPE}\` |
-          | Version bump | **${BUMP}** |
-          | Commits | ${COMMIT_COUNT} |
+          # docs-only -> skip
+          if ai_type == 'docs':
+              out('skip', 'true'); sys.exit(0)
 
-          ### Commits in this release
+          mapping = {
+              'breaking': ('breaking-change', '💥', 'MAJOR'),
+              'feat':     ('enhancement',     '✨', 'MINOR'),
+              'fix':      ('bug',             '🐛', 'PATCH'),
+              'refactor': ('refactor',        '♻️', 'PATCH'),
+          }
+          label, emoji, bump = mapping.get(ai_type, ('enhancement', '✨', 'MINOR'))
 
-          $(git log origin/master..HEAD --pretty=format:"- \`%h\` %s" | head -30)
+          out('type',   ai_type)
+          out('label',  label)
+          out('emoji',  emoji)
+          out('bump',   bump)
+          out('source', source)
 
-          ---
+          latest = git('log', '-1', '--pretty=format:%s')
+          out('latest_commit', latest)
 
-          ### Pre-merge checklist
-          - [ ] All CI tests pass
-          - [ ] Coverage ≥ 85 %
-          - [ ] \`CHANGELOG.md\` updated under \`[Unreleased]\`
-          - [ ] No hardcoded credentials
+          commit_lines = git('log', 'origin/master..HEAD', '--pretty=format:- `%h` %s').splitlines()
+          out('commit_count', str(len(commit_lines)))
 
-          ---
-          *This PR was opened automatically. Copilot review has been requested.*
-          BODY_EOF
+          # Build PR body line-by-line (avoid bare '>' / '---' at col-0 in the YAML block)
+          sep = "---"
+          body  = f"## {emoji} Automated Release PR\n\n"
+          body += f"_Auto-generated by CI. Classified by: **{source}**_\n"
+          body += "_Review, approve, and merge to publish to PyPI._\n\n"
+          body += sep + "\n\n"
+          body += "### Summary\n"
+          body += "| | |\n|---|---|\n"
+          body += f"| Change type | `{ai_type}` |\n"
+          body += f"| Version bump | **{bump}** |\n"
+          body += f"| Commits | {len(commit_lines)} |\n"
+          body += f"| Classified by | {source} |\n\n"
+          body += "### Changed files\n"
+          body += "\n".join(f"- `{f}`" for f in all_files[:30])
+          body += "\n\n### Commits\n"
+          body += "\n".join(commit_lines[:30])
+          body += "\n\n" + sep + "\n\n### Pre-merge checklist\n"
+          body += "- [ ] All CI tests pass\n"
+          body += "- [ ] Coverage >= 85 %\n"
+          body += "- [ ] `CHANGELOG.md` updated under `[Unreleased]`\n"
+          body += "- [ ] No hardcoded credentials\n\n"
+          body += sep + "\n\n"
+          body += "_Auto PR by CI. Use `@iris` to manage this PR, `@temis` to review._"
+
+          with open('/tmp/pr_body.md', 'w') as f:
+              f.write(body)
+
+          PYEOF
 
       # --- 5. CHECK FOR EXISTING OPEN PR ---
       - name: Check for existing open PR
