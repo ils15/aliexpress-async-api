@@ -1,11 +1,13 @@
 """Product-related models"""
+
 from dataclasses import dataclass, field
-from typing import List, Optional, Any, Dict
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
 class Product:
     """AliExpress affiliate product"""
+
     product_id: int
     product_title: str
     product_main_image_url: str
@@ -21,6 +23,7 @@ class Product:
 @dataclass
 class ProductSearchResponse:
     """Response from product search/query endpoints"""
+
     products: List[Product]
     total_record_count: int
     current_record_count: int

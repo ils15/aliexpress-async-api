@@ -1,4 +1,5 @@
 """Order-related models"""
+
 from dataclasses import dataclass, field
 from typing import Any, Dict
 
@@ -6,6 +7,7 @@ from typing import Any, Dict
 @dataclass
 class Order:
     """AliExpress affiliate order"""
+
     order_id: int
     order_status: str
     order_time: str

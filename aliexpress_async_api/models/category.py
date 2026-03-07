@@ -1,11 +1,13 @@
 """Category and promotion models"""
+
 from dataclasses import dataclass, field
-from typing import Optional, Any, Dict
+from typing import Any, Dict, Optional
 
 
 @dataclass
 class Category:
     """Product category"""
+
     category_id: int
     category_name: str
     parent_category_id: Optional[int] = None
@@ -15,6 +17,7 @@ class Category:
 @dataclass
 class PromoInfo:
     """Promotion information"""
+
     promo_name: str
     promo_desc: str
     product_num: int

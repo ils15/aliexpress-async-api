@@ -1,16 +1,29 @@
+import logging
 import urllib.parse
 from typing import Any, Dict, List, Optional
+
 import aiohttp
-import logging
 
 from .auth import AliExpressAuth
-from .exceptions import APIRequestException, InvalidCredentialsException, ProductNotFoundException
+from .exceptions import (
+    APIRequestException,
+    InvalidCredentialsException,
+    ProductNotFoundException,
+)
 from .models import (
-    Product, AffiliateLink, ProductSearchResponse, TokenResponse,
-    Category, PromoInfo, ShippingInfo, SKUInfo, Order
+    AffiliateLink,
+    Category,
+    Order,
+    Product,
+    ProductSearchResponse,
+    PromoInfo,
+    ShippingInfo,
+    SKUInfo,
+    TokenResponse,
 )
 
 logger = logging.getLogger(__name__)
+
 
 class AliExpressIOPClient:
     """
@@ -19,13 +32,15 @@ class AliExpressIOPClient:
 
     BASE_URL = "https://api-sg.aliexpress.com/sync"
 
-    def __init__(self, app_key: str, app_secret: str, tracking_id: Optional[str] = None):
+    def __init__(
+        self, app_key: str, app_secret: str, tracking_id: Optional[str] = None
+    ):
         """
         Initializes the client with your AliExpress Open Platform credentials.
         """
         if not app_key or not app_secret:
             raise InvalidCredentialsException("app_key and app_secret are required.")
-            
+
         self.auth = AliExpressAuth(app_key, app_secret)
         self.tracking_id = tracking_id
         self._session: Optional[aiohttp.ClientSession] = None
@@ -59,13 +74,15 @@ class AliExpressIOPClient:
             "view": view,
             "state": state,
         }
-        return "https://auth.aliexpress.com/oauth/authorize?" + urllib.parse.urlencode(params)
+        return "https://auth.aliexpress.com/oauth/authorize?" + urllib.parse.urlencode(
+            params
+        )
 
     async def request(
         self,
         api_method: str,
         business_params: Dict[str, str],
-        access_token: Optional[str] = None
+        access_token: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Makes an authenticated API request using the V1 MD5 signature.
@@ -83,10 +100,7 @@ class AliExpressIOPClient:
         }
 
         async with self._session.post(
-            self.BASE_URL,
-            params=sys_params,
-            data=business_params,
-            headers=headers
+            self.BASE_URL, params=sys_params, data=business_params, headers=headers
         ) as response:
             raw = await response.json(content_type=None)
             self._check_error(raw)
@@ -95,15 +109,15 @@ class AliExpressIOPClient:
     def _check_error(self, raw: Any):
         if not isinstance(raw, dict):
             raise APIRequestException(f"Unexpected response type: {type(raw)}")
-            
+
         if "error_response" in raw:
             err = raw["error_response"]
             raise APIRequestException(
                 message=err.get("msg", "Unknown error"),
                 code=err.get("code"),
-                sub_code=err.get("sub_code")
+                sub_code=err.get("sub_code"),
             )
-            
+
     # ── API Methods ────────────────────────────────────────────────────────────
 
     async def search_products(
@@ -115,7 +129,7 @@ class AliExpressIOPClient:
         target_currency: str = "BRL",
         target_language: str = "PT",
         country: str = "BR",
-        access_token: Optional[str] = None
+        access_token: Optional[str] = None,
     ) -> ProductSearchResponse:
         """
         Searches for affiliate products.
@@ -131,21 +145,27 @@ class AliExpressIOPClient:
             "target_language": target_language,
             "country": country,
         }
-        
+
         raw = await self.request(api_method, business, access_token)
         resp = raw.get("aliexpress_affiliate_product_query_response", {})
         result = resp.get("resp_result", {}).get("result", {})
-        
+
         products_data = result.get("products", {}).get("product", [])
-        
-        products = [Product(**{k: v for k, v in p.items() if k in Product.__annotations__}, raw_data=p) for p in products_data]
-        
+
+        products = [
+            Product(
+                **{k: v for k, v in p.items() if k in Product.__annotations__},
+                raw_data=p,
+            )
+            for p in products_data
+        ]
+
         return ProductSearchResponse(
             products=products,
             total_record_count=result.get("total_record_count", 0),
             current_record_count=result.get("current_record_count", 0),
             page_no=page_no,
-            raw_data=raw
+            raw_data=raw,
         )
 
     # Alias for user's test script
@@ -165,7 +185,7 @@ class AliExpressIOPClient:
         target_currency: str = "BRL",
         target_language: str = "PT",
         country: str = "BR",
-        access_token: Optional[str] = None
+        access_token: Optional[str] = None,
     ) -> List[Product]:
         """
         Gets detailed information about specific affiliate products.
@@ -183,12 +203,18 @@ class AliExpressIOPClient:
         raw = await self.request(api_method, business, access_token)
         resp = raw.get("aliexpress_affiliate_productdetail_get_response", {})
         result = resp.get("resp_result", {}).get("result", {})
-        
+
         products_data = result.get("products", {}).get("product", [])
         if not products_data:
             raise ProductNotFoundException("No products found for the given IDs.")
-            
-        return [Product(**{k: v for k, v in p.items() if k in Product.__annotations__}, raw_data=p) for p in products_data]
+
+        return [
+            Product(
+                **{k: v for k, v in p.items() if k in Product.__annotations__},
+                raw_data=p,
+            )
+            for p in products_data
+        ]
 
     # Alias for user's test script
     async def get_product_detail(self, *args, **kwargs) -> List[Product]:
@@ -199,7 +225,7 @@ class AliExpressIOPClient:
         self,
         source_values: str,
         promotion_link_type: int = 0,
-        access_token: Optional[str] = None
+        access_token: Optional[str] = None,
     ) -> List[AffiliateLink]:
         """
         Generates trackable affiliate links.
@@ -213,20 +239,28 @@ class AliExpressIOPClient:
 
         raw = await self.request(api_method, business, access_token)
         resp = raw.get("aliexpress_affiliate_link_generate_response", {})
-        links_data = resp.get("resp_result", {}).get("result", {}).get("promotion_links", {}).get("promotion_link", [])
-        
-        return [AffiliateLink(
-            promotion_link=l.get("promotion_link", ""),
-            source_value=l.get("source_value", ""),
-            raw_data=l
-        ) for l in links_data]
+        links_data = (
+            resp.get("resp_result", {})
+            .get("result", {})
+            .get("promotion_links", {})
+            .get("promotion_link", [])
+        )
+
+        return [
+            AffiliateLink(
+                promotion_link=l.get("promotion_link", ""),
+                source_value=l.get("source_value", ""),
+                raw_data=l,
+            )
+            for l in links_data
+        ]
 
     async def generate_affiliate_links(
         self,
         promotion_links: List[str],
         tracking_id: Optional[str] = None,
         promotion_link_type: int = 0,
-        access_token: Optional[str] = None
+        access_token: Optional[str] = None,
     ) -> List[AffiliateLink]:
         """Alias wrapper to handle list of links from test script directly."""
         source_values = ",".join(promotion_links)
@@ -235,7 +269,9 @@ class AliExpressIOPClient:
         if tracking_id:
             self.tracking_id = tracking_id
         try:
-            return await self.generate_affiliate_link(source_values, promotion_link_type, access_token)
+            return await self.generate_affiliate_link(
+                source_values, promotion_link_type, access_token
+            )
         finally:
             self.tracking_id = old_tid
 
@@ -245,13 +281,13 @@ class AliExpressIOPClient:
         """
         api_method = "aliexpress.auth.token.create"
         raw = await self.request(api_method, {"code": code})
-        
+
         return TokenResponse(
             access_token=raw.get("access_token", ""),
             refresh_token=raw.get("refresh_token", ""),
             expire_time=raw.get("expire_time", 0),
             account=raw.get("account", ""),
-            raw_data=raw
+            raw_data=raw,
         )
 
     async def refresh_token(self, refresh_token_value: str) -> TokenResponse:
@@ -260,13 +296,13 @@ class AliExpressIOPClient:
         """
         api_method = "aliexpress.auth.token.refresh"
         raw = await self.request(api_method, {"refresh_token": refresh_token_value})
-        
+
         return TokenResponse(
             access_token=raw.get("access_token", ""),
             refresh_token=raw.get("refresh_token", ""),
             expire_time=raw.get("expire_time", 0),
             account=raw.get("account", ""),
-            raw_data=raw
+            raw_data=raw,
         )
 
     # ── New Endpoints to Implement ──────────────────────────────────────
@@ -280,7 +316,7 @@ class AliExpressIOPClient:
         target_currency: str = "BRL",
         target_language: str = "PT",
         country: str = "BR",
-        access_token: Optional[str] = None
+        access_token: Optional[str] = None,
     ) -> ProductSearchResponse:
         """aliexpress.affiliate.product.smartmatch"""
         api_method = "aliexpress.affiliate.product.smartmatch"
@@ -301,14 +337,20 @@ class AliExpressIOPClient:
         resp = raw.get("aliexpress_affiliate_product_smartmatch_response", {})
         result = resp.get("resp_result", {}).get("result", {})
         products_data = result.get("products", {}).get("product", [])
-        
-        products = [Product(**{k: v for k, v in p.items() if k in Product.__annotations__}, raw_data=p) for p in products_data]
+
+        products = [
+            Product(
+                **{k: v for k, v in p.items() if k in Product.__annotations__},
+                raw_data=p,
+            )
+            for p in products_data
+        ]
         return ProductSearchResponse(
             products=products,
             total_record_count=result.get("total_record_count", 0),
             current_record_count=result.get("current_record_count", 0),
             page_no=page_no,
-            raw_data=raw
+            raw_data=raw,
         )
 
     async def get_hotproducts(
@@ -319,7 +361,7 @@ class AliExpressIOPClient:
         target_currency: str = "BRL",
         target_language: str = "PT",
         country: str = "BR",
-        access_token: Optional[str] = None
+        access_token: Optional[str] = None,
     ) -> ProductSearchResponse:
         """aliexpress.affiliate.hotproduct.query"""
         api_method = "aliexpress.affiliate.hotproduct.query"
@@ -338,17 +380,25 @@ class AliExpressIOPClient:
         resp = raw.get("aliexpress_affiliate_hotproduct_query_response", {})
         result = resp.get("resp_result", {}).get("result", {})
         products_data = result.get("products", {}).get("product", [])
-        
-        products = [Product(**{k: v for k, v in p.items() if k in Product.__annotations__}, raw_data=p) for p in products_data]
+
+        products = [
+            Product(
+                **{k: v for k, v in p.items() if k in Product.__annotations__},
+                raw_data=p,
+            )
+            for p in products_data
+        ]
         return ProductSearchResponse(
             products=products,
             total_record_count=result.get("total_record_count", 0),
             current_record_count=result.get("current_record_count", 0),
             page_no=page_no,
-            raw_data=raw
+            raw_data=raw,
         )
 
-    async def get_hotproduct_download(self, category_id: str, access_token: Optional[str] = None) -> Dict:
+    async def get_hotproduct_download(
+        self, category_id: str, access_token: Optional[str] = None
+    ) -> Dict:
         """aliexpress.affiliate.hotproduct.download"""
         api_method = "aliexpress.affiliate.hotproduct.download"
         business = {
@@ -357,7 +407,9 @@ class AliExpressIOPClient:
         raw = await self.request(api_method, business, access_token)
         return raw
 
-    async def get_categories(self, access_token: Optional[str] = None) -> List[Category]:
+    async def get_categories(
+        self, access_token: Optional[str] = None
+    ) -> List[Category]:
         """aliexpress.affiliate.category.get"""
         api_method = "aliexpress.affiliate.category.get"
         business = {}
@@ -365,10 +417,18 @@ class AliExpressIOPClient:
         resp = raw.get("aliexpress_affiliate_category_get_response", {})
         result = resp.get("resp_result", {}).get("result", {})
         cats_data = result.get("categories", {}).get("category", [])
-        
-        return [Category(**{k: v for k, v in c.items() if k in Category.__annotations__}, raw_data=c) for c in cats_data]
 
-    async def get_featured_promo(self, access_token: Optional[str] = None) -> List[PromoInfo]:
+        return [
+            Category(
+                **{k: v for k, v in c.items() if k in Category.__annotations__},
+                raw_data=c,
+            )
+            for c in cats_data
+        ]
+
+    async def get_featured_promo(
+        self, access_token: Optional[str] = None
+    ) -> List[PromoInfo]:
         """aliexpress.affiliate.featuredpromo.get"""
         api_method = "aliexpress.affiliate.featuredpromo.get"
         business = {}
@@ -376,8 +436,14 @@ class AliExpressIOPClient:
         resp = raw.get("aliexpress_affiliate_featuredpromo_get_response", {})
         result = resp.get("resp_result", {}).get("result", {})
         promos_data = result.get("promos", {}).get("promo", [])
-        
-        return [PromoInfo(**{k: v for k, v in p.items() if k in PromoInfo.__annotations__}, raw_data=p) for p in promos_data]
+
+        return [
+            PromoInfo(
+                **{k: v for k, v in p.items() if k in PromoInfo.__annotations__},
+                raw_data=p,
+            )
+            for p in promos_data
+        ]
 
     async def get_featured_promo_products(
         self,
@@ -387,7 +453,7 @@ class AliExpressIOPClient:
         target_currency: str = "BRL",
         target_language: str = "PT",
         country: str = "BR",
-        access_token: Optional[str] = None
+        access_token: Optional[str] = None,
     ) -> ProductSearchResponse:
         """aliexpress.affiliate.featuredpromo.products.get"""
         api_method = "aliexpress.affiliate.featuredpromo.products.get"
@@ -406,14 +472,20 @@ class AliExpressIOPClient:
         resp = raw.get("aliexpress_affiliate_featuredpromo_products_get_response", {})
         result = resp.get("resp_result", {}).get("result", {})
         products_data = result.get("products", {}).get("product", [])
-        
-        products = [Product(**{k: v for k, v in p.items() if k in Product.__annotations__}, raw_data=p) for p in products_data]
+
+        products = [
+            Product(
+                **{k: v for k, v in p.items() if k in Product.__annotations__},
+                raw_data=p,
+            )
+            for p in products_data
+        ]
         return ProductSearchResponse(
             products=products,
             total_record_count=result.get("total_record_count", 0),
             current_record_count=result.get("current_record_count", 0),
             page_no=page_no,
-            raw_data=raw
+            raw_data=raw,
         )
 
     async def get_shipping_info(
@@ -426,7 +498,7 @@ class AliExpressIOPClient:
         target_currency: str = "BRL",
         send_goods_country_code: str = "CN",
         ship_to_country: str = "BR",
-        access_token: Optional[str] = None
+        access_token: Optional[str] = None,
     ) -> ShippingInfo:
         """aliexpress.affiliate.product.shipping.get"""
         api_method = "aliexpress.affiliate.product.shipping.get"
@@ -443,12 +515,12 @@ class AliExpressIOPClient:
         raw = await self.request(api_method, business, access_token)
         resp = raw.get("aliexpress_affiliate_product_shipping_get_response", {})
         result = resp.get("resp_result", {}).get("result", {}).get("shipping_info", {})
-        
+
         return ShippingInfo(
             estimated_delivery_time=result.get("estimated_delivery_time", ""),
             freight=result.get("freight", ""),
             tracking_available=result.get("tracking_available", ""),
-            raw_data=result
+            raw_data=result,
         )
 
     async def get_sku_detail(
@@ -457,7 +529,7 @@ class AliExpressIOPClient:
         target_currency: str = "BRL",
         target_language: str = "PT",
         ship_to_country: str = "BR",
-        access_token: Optional[str] = None
+        access_token: Optional[str] = None,
     ) -> List[SKUInfo]:
         """aliexpress.affiliate.product.sku.detail.get"""
         api_method = "aliexpress.affiliate.product.sku.detail.get"
@@ -471,8 +543,14 @@ class AliExpressIOPClient:
         resp = raw.get("aliexpress_affiliate_product_sku_detail_get_response", {})
         result = resp.get("resp_result", {}).get("result", {})
         skus_data = result.get("skus", {}).get("sku", [])
-        
-        return [SKUInfo(**{k: v for k, v in s.items() if k in SKUInfo.__annotations__}, raw_data=s) for s in skus_data]
+
+        return [
+            SKUInfo(
+                **{k: v for k, v in s.items() if k in SKUInfo.__annotations__},
+                raw_data=s,
+            )
+            for s in skus_data
+        ]
 
     async def get_order_list(
         self,
@@ -481,7 +559,7 @@ class AliExpressIOPClient:
         status: str = "Completed",
         page_no: int = 1,
         page_size: int = 20,
-        access_token: Optional[str] = None
+        access_token: Optional[str] = None,
     ) -> List[Order]:
         """aliexpress.affiliate.order.list"""
         api_method = "aliexpress.affiliate.order.list"
@@ -492,13 +570,18 @@ class AliExpressIOPClient:
             "page_no": str(page_no),
             "page_size": str(page_size),
         }
-        
+
         raw = await self.request(api_method, business, access_token)
         resp = raw.get("aliexpress_affiliate_order_list_response", {})
         result = resp.get("resp_result", {}).get("result", {})
         orders_data = result.get("orders", {}).get("order", [])
-        
-        return [Order(**{k: v for k, v in o.items() if k in Order.__annotations__}, raw_data=o) for o in orders_data]
+
+        return [
+            Order(
+                **{k: v for k, v in o.items() if k in Order.__annotations__}, raw_data=o
+            )
+            for o in orders_data
+        ]
 
     async def get_order_list_by_index(
         self,
@@ -508,7 +591,7 @@ class AliExpressIOPClient:
         time_type: str = "payment_time",
         status: str = "Completed",
         page_size: int = 20,
-        access_token: Optional[str] = None
+        access_token: Optional[str] = None,
     ) -> List[Order]:
         """aliexpress.affiliate.order.listbyindex"""
         api_method = "aliexpress.affiliate.order.listbyindex"
@@ -520,36 +603,41 @@ class AliExpressIOPClient:
             "status": status,
             "page_size": str(page_size),
         }
-        
+
         raw = await self.request(api_method, business, access_token)
         resp = raw.get("aliexpress_affiliate_order_listbyindex_response", {})
         result = resp.get("resp_result", {}).get("result", {})
         orders_data = result.get("orders", {}).get("order", [])
-        
-        return [Order(**{k: v for k, v in o.items() if k in Order.__annotations__}, raw_data=o) for o in orders_data]
 
-    async def get_order_info(self, order_ids: List[str], access_token: Optional[str] = None) -> List[Order]:
+        return [
+            Order(
+                **{k: v for k, v in o.items() if k in Order.__annotations__}, raw_data=o
+            )
+            for o in orders_data
+        ]
+
+    async def get_order_info(
+        self, order_ids: List[str], access_token: Optional[str] = None
+    ) -> List[Order]:
         """aliexpress.affiliate.order.get"""
         api_method = "aliexpress.affiliate.order.get"
-        business = {
-            "order_ids": ",".join(str(i) for i in order_ids)
-        }
+        business = {"order_ids": ",".join(str(i) for i in order_ids)}
         raw = await self.request(api_method, business, access_token)
         resp = raw.get("aliexpress_affiliate_order_get_response", {})
         result = resp.get("resp_result", {}).get("result", {})
         orders_data = result.get("orders", {}).get("order", [])
-        
-        return [Order(**{k: v for k, v in o.items() if k in Order.__annotations__}, raw_data=o) for o in orders_data]
+
+        return [
+            Order(
+                **{k: v for k, v in o.items() if k in Order.__annotations__}, raw_data=o
+            )
+            for o in orders_data
+        ]
 
     async def inquire_business_license(
-        self, 
-        merchant_item_id: str, 
-        access_token: Optional[str] = None
+        self, merchant_item_id: str, access_token: Optional[str] = None
     ) -> Dict:
         """/aliexpress/xinghe/merchant/license/get"""
         api_method = "/aliexpress/xinghe/merchant/license/get"
-        business = {
-            "merchant_item_id": merchant_item_id
-        }
+        business = {"merchant_item_id": merchant_item_id}
         return await self.request(api_method, business, access_token)
-
