@@ -1,14 +1,17 @@
 """
 Products endpoint module
 """
-from typing import Optional, List, Dict
+
+from typing import Dict, List, Optional
+
 from aliexpress_async_api.models import Product, ProductSearchResponse
+
 from .base import BaseEndpoint
 
 
 class ProductsEndpoint(BaseEndpoint):
     """Products endpoint methods"""
-    
+
     async def search_products(
         self,
         keyword: str,
@@ -19,11 +22,11 @@ class ProductsEndpoint(BaseEndpoint):
         target_language: str = "PT",
         country: str = "BR",
         tracking_id: Optional[str] = None,
-        access_token: Optional[str] = None
+        access_token: Optional[str] = None,
     ) -> ProductSearchResponse:
         """
         Search for affiliate products
-        
+
         Args:
             keyword: Search term
             page_no: Page number (default: 1)
@@ -34,7 +37,7 @@ class ProductsEndpoint(BaseEndpoint):
             country: Country code (default: BR)
             tracking_id: Tracking ID for affiliate
             access_token: Optional auth token
-        
+
         Returns:
             ProductSearchResponse with matched products
         """
@@ -49,29 +52,29 @@ class ProductsEndpoint(BaseEndpoint):
             "target_language": target_language,
             "country": country,
         }
-        
+
         raw = await self.request(api_method, business, access_token)
         resp = raw.get("aliexpress_affiliate_product_query_response", {})
         result = resp.get("resp_result", {}).get("result", {})
-        
+
         products_data = result.get("products", {}).get("product", [])
-        
+
         products = [
             Product(
                 **{k: v for k, v in p.items() if k in Product.__annotations__},
-                raw_data=p
+                raw_data=p,
             )
             for p in products_data
         ]
-        
+
         return ProductSearchResponse(
             products=products,
             total_record_count=result.get("total_record_count", 0),
             current_record_count=result.get("current_record_count", 0),
             page_no=page_no,
-            raw_data=raw
+            raw_data=raw,
         )
-    
+
     async def get_product_details(
         self,
         product_ids: List[str],
@@ -80,11 +83,11 @@ class ProductsEndpoint(BaseEndpoint):
         target_language: str = "PT",
         country: str = "BR",
         tracking_id: Optional[str] = None,
-        access_token: Optional[str] = None
+        access_token: Optional[str] = None,
     ) -> List[Product]:
         """
         Get details for specific products
-        
+
         Args:
             product_ids: List of product IDs
             fields: Fields to retrieve
@@ -93,15 +96,15 @@ class ProductsEndpoint(BaseEndpoint):
             country: Country code
             tracking_id: Tracking ID for affiliate
             access_token: Optional auth token
-        
+
         Returns:
             List of Product objects with details
-        
+
         Raises:
             ProductNotFoundException: If no products found
         """
         from aliexpress_async_api.exceptions import ProductNotFoundException
-        
+
         api_method = "aliexpress.affiliate.productdetail.get"
         business = {
             "product_ids": ",".join(str(i) for i in product_ids),
@@ -115,19 +118,19 @@ class ProductsEndpoint(BaseEndpoint):
         raw = await self.request(api_method, business, access_token)
         resp = raw.get("aliexpress_affiliate_productdetail_get_response", {})
         result = resp.get("resp_result", {}).get("result", {})
-        
+
         products_data = result.get("products", {}).get("product", [])
         if not products_data:
             raise ProductNotFoundException("No products found for the given IDs.")
-            
+
         return [
             Product(
                 **{k: v for k, v in p.items() if k in Product.__annotations__},
-                raw_data=p
+                raw_data=p,
             )
             for p in products_data
         ]
-    
+
     async def smart_match_products(
         self,
         keywords: Optional[str] = None,
@@ -138,7 +141,7 @@ class ProductsEndpoint(BaseEndpoint):
         target_language: str = "PT",
         country: str = "BR",
         tracking_id: Optional[str] = None,
-        access_token: Optional[str] = None
+        access_token: Optional[str] = None,
     ) -> ProductSearchResponse:
         """Smart match products by keyword or ID"""
         api_method = "aliexpress.affiliate.product.smartmatch"
@@ -159,11 +162,11 @@ class ProductsEndpoint(BaseEndpoint):
         resp = raw.get("aliexpress_affiliate_product_smartmatch_response", {})
         result = resp.get("resp_result", {}).get("result", {})
         products_data = result.get("products", {}).get("product", [])
-        
+
         products = [
             Product(
                 **{k: v for k, v in p.items() if k in Product.__annotations__},
-                raw_data=p
+                raw_data=p,
             )
             for p in products_data
         ]
@@ -172,9 +175,9 @@ class ProductsEndpoint(BaseEndpoint):
             total_record_count=result.get("total_record_count", 0),
             current_record_count=result.get("current_record_count", 0),
             page_no=page_no,
-            raw_data=raw
+            raw_data=raw,
         )
-    
+
     async def get_hotproducts(
         self,
         category_ids: Optional[str] = None,
@@ -184,7 +187,7 @@ class ProductsEndpoint(BaseEndpoint):
         target_language: str = "PT",
         country: str = "BR",
         tracking_id: Optional[str] = None,
-        access_token: Optional[str] = None
+        access_token: Optional[str] = None,
     ) -> ProductSearchResponse:
         """Get hot/trending products"""
         api_method = "aliexpress.affiliate.hotproduct.query"
@@ -203,11 +206,11 @@ class ProductsEndpoint(BaseEndpoint):
         resp = raw.get("aliexpress_affiliate_hotproduct_query_response", {})
         result = resp.get("resp_result", {}).get("result", {})
         products_data = result.get("products", {}).get("product", [])
-        
+
         products = [
             Product(
                 **{k: v for k, v in p.items() if k in Product.__annotations__},
-                raw_data=p
+                raw_data=p,
             )
             for p in products_data
         ]
@@ -216,13 +219,11 @@ class ProductsEndpoint(BaseEndpoint):
             total_record_count=result.get("total_record_count", 0),
             current_record_count=result.get("current_record_count", 0),
             page_no=page_no,
-            raw_data=raw
+            raw_data=raw,
         )
-    
+
     async def get_hotproduct_download(
-        self,
-        category_id: str,
-        access_token: Optional[str] = None
+        self, category_id: str, access_token: Optional[str] = None
     ) -> Dict:
         """Download hot product data"""
         api_method = "aliexpress.affiliate.hotproduct.download"

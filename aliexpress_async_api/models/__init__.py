@@ -1,11 +1,12 @@
 """Package initialization - models module"""
-from .base import BaseModel
-from .product import Product, ProductSearchResponse
-from .token import TokenResponse
+
 from .affiliate import AffiliateLink
-from .order import Order
+from .base import BaseModel
 from .category import Category, PromoInfo
+from .order import Order
+from .product import Product, ProductSearchResponse
 from .shipping import ShippingInfo, SKUInfo
+from .token import TokenResponse
 
 __all__ = [
     "BaseModel",

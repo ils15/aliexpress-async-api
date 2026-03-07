@@ -6,76 +6,117 @@ on:
       - master
 
 jobs:
-  test-and-publish:
+  # ── 1. TEST MATRIX ────────────────────────────────────────────────────────
+  test:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run tests
+        run: pytest tests/ -q
+
+  # ── 2. DEPLOY ─────────────────────────────────────────────────────────────
+  deploy:
+    name: Bump · Changelog · Build · Publish
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      packages: write
-      id-token: write  # required for PyPI Trusted Publishing (OIDC)
-    
+      id-token: write  # Required for PyPI Trusted Publishing (OIDC — no API token needed)
+
+    env:
+      PKG_NAME: "aliexpress_async_api"  # Change this in each repo (e.g. shopee_async_api)
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # For full git history
-      
+          fetch-depth: 0
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.12'
-      
+          python-version: "3.12"
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
           pip install build twine
-      
-      # TEST PHASE
-      - name: Run tests
+
+      # READ PR LABEL → determine bump type decided by AI in auto-pr
+      - name: Resolve bump type from merged PR label
+        id: pr_label
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python -m pytest tests/ -v --cov=aliexpress_async_api \
-            --cov-report=xml --cov-report=term-missing
-      
-      - name: Check test coverage
-        run: |
-          coverage report --fail-under=85 || exit 1
-      
-      # VERSION BUMP PHASE
+          LABEL=$(gh pr list \
+            --base master \
+            --state merged \
+            --limit 1 \
+            --json labels \
+            --jq '.[0].labels[].name' \
+            2>/dev/null \
+            | grep -E '^(breaking-change|enhancement|bug|refactor)$' \
+            | head -n 1)
+
+          if   [ "$LABEL" = "breaking-change" ]; then BUMP="major"
+          elif [ "$LABEL" = "enhancement" ];     then BUMP="minor"
+          elif [ "$LABEL" = "bug" ];             then BUMP="patch"
+          elif [ "$LABEL" = "refactor" ];        then BUMP="patch"
+          else
+            # No recognisable label — signal the script to use commit-msg fallback
+            BUMP=""
+          fi
+
+          echo "bump=${BUMP}" >> "$GITHUB_OUTPUT"
+          echo "::notice::Bump type from PR label: '${LABEL}' → ${BUMP:-commit-msg fallback}"
+
+      # VERSION BUMP
       - name: Bump version (semantic)
         id: version
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          
-          # Get commit message and export so the Python script can read it
-          COMMIT_MSG=$(git log -1 --pretty=%B)
-          export GIT_COMMIT_MESSAGE="$COMMIT_MSG"
-          
-          # Run version bump script (writes to $GITHUB_OUTPUT automatically)
-          python scripts/bump_version.py
-      
-      # CHANGELOG GENERATION PHASE
-      - name: Generate changelog
+        env:
+          BUMP_TYPE: ${{ steps.pr_label.outputs.bump }}
+          GIT_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: python scripts/bump_version.py
+
+      # CHANGELOG
+      - name: Finalize changelog
         if: steps.version.outputs.should_publish == 'true'
-        run: |
-          export VERSION=${{ steps.version.outputs.version }}
-          python scripts/generate_changelog.py
-      
-      # BUILD PHASE
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: python scripts/finalize_changelog.py
+
+      # BUILD
       - name: Build package
-        run: |
-          python -m build
-      
+        if: steps.version.outputs.should_publish == 'true'
+        run: python -m build
+
       - name: Verify package
-        run: |
-          twine check dist/*
-      
-      # PUBLISH PHASE (only if version was bumped)
+        if: steps.version.outputs.should_publish == 'true'
+        run: twine check dist/*
+
+      # PUBLISH TO PyPI — Trusted Publishing (OIDC, no API token needed)
       - name: Publish to PyPI
         if: steps.version.outputs.should_publish == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
-      
-      # GITHUB RELEASE PHASE
+
+      # GITHUB RELEASE
       - name: Create GitHub Release
         if: steps.version.outputs.should_publish == 'true'
         uses: softprops/action-gh-release@v1
@@ -87,20 +128,33 @@ jobs:
           files: dist/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-      # COMMIT VERSION BUMP
-      - name: Commit version bump
+
+      # COMMIT chore(release) BACK TO MASTER
+      - name: Commit release files
         if: steps.version.outputs.should_publish == 'true'
-        run: |
-          git add pyproject.toml aliexpress_async_api/__init__.py CHANGELOG.md
-          git commit -m "chore(release): v${{ steps.version.outputs.version }}"
-          git push origin master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-      # NOTIFICATIONS
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}
+          git add pyproject.toml ${{ env.PKG_NAME }}/__init__.py CHANGELOG.md
+          git commit -m "chore(release): v${{ steps.version.outputs.version }} [skip ci]"
+          git push origin master
+
+      # SYNC MASTER → DEVELOP
+      - name: Sync master back to develop
+        if: steps.version.outputs.should_publish == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git fetch origin develop
+          git checkout develop
+          git merge origin/master --no-edit -m "chore(sync): merge master into develop after release v${{ steps.version.outputs.version }} [skip ci]"
+          git push origin develop
+
       - name: Publish notification
         if: steps.version.outputs.should_publish == 'true'
         run: |
           echo "✅ Published v${{ steps.version.outputs.version }} to PyPI"
-          echo "📦 Install: pip install aliexpress-async-api==${{ steps.version.outputs.version }}"
+          echo "📦 pip install aliexpress-async-api==${{ steps.version.outputs.version }}"

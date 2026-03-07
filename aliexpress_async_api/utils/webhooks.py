@@ -1,21 +1,23 @@
 """
 Webhook support for async notifications
 """
-import ipaddress
-from dataclasses import dataclass, field
-from typing import Dict, List, Any, Optional
-from enum import Enum
-from urllib.parse import urlparse
-import aiohttp
-import asyncio
-import logging
 
+import asyncio
+import ipaddress
+import logging
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
+
+import aiohttp
 
 logger = logging.getLogger(__name__)
 
 
 class WebhookEvent(str, Enum):
     """Supported webhook events"""
+
     ORDER_COMPLETED = "order.completed"
     PRODUCT_FOUND = "product.found"
     LINK_GENERATED = "link.generated"
@@ -25,27 +27,24 @@ class WebhookEvent(str, Enum):
 @dataclass
 class WebhookPayload:
     """Webhook notification payload"""
+
     event: str
     timestamp: float
     data: Dict[str, Any]
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
-        return {
-            "event": self.event,
-            "timestamp": self.timestamp,
-            "data": self.data
-        }
+        return {"event": self.event, "timestamp": self.timestamp, "data": self.data}
 
 
 class WebhookManager:
     """Manage webhook registrations and dispatch"""
-    
+
     def __init__(self):
         """Initialize webhook manager"""
         self.webhooks: Dict[str, List[str]] = {}
         self.session: Optional[aiohttp.ClientSession] = None
-    
+
     def _validate_webhook_url(self, url: str) -> None:
         """
         Validate a webhook URL to prevent SSRF attacks.
@@ -73,9 +72,7 @@ class WebhookManager:
 
         _BLOCKED_HOSTS = {"localhost", "localhost.localdomain", "0.0.0.0", "::1"}
         if hostname.lower() in _BLOCKED_HOSTS:
-            raise ValueError(
-                f"Webhook URL hostname is not allowed: {hostname!r}"
-            )
+            raise ValueError(f"Webhook URL hostname is not allowed: {hostname!r}")
 
         # When the hostname is a literal IP address, reject private/reserved ranges.
         # (Hostname-based DNS rebinding is not covered here.)
@@ -112,7 +109,7 @@ class WebhookManager:
                 self.webhooks[event] = []
             if url not in self.webhooks[event]:
                 self.webhooks[event].append(url)
-    
+
     def unregister(self, url: str, events: Optional[List[str]] = None) -> None:
         """Unregister webhook"""
         if events is None:
@@ -125,50 +122,46 @@ class WebhookManager:
             for event in events:
                 if event in self.webhooks and url in self.webhooks[event]:
                     self.webhooks[event].remove(url)
-    
+
     async def dispatch(self, event: str, data: Dict[str, Any]) -> None:
         """
         Dispatch webhook to all registered URLs
-        
+
         Args:
             event: Event name
             data: Event data
         """
         if event not in self.webhooks:
             return
-        
+
         import time
-        payload = WebhookPayload(
-            event=event,
-            timestamp=time.time(),
-            data=data
-        )
-        
+
+        payload = WebhookPayload(event=event, timestamp=time.time(), data=data)
+
         if self.session is None:
             self.session = aiohttp.ClientSession()
-        
+        session = self.session
+
         tasks = []
         for url in self.webhooks[event]:
-            tasks.append(self._post_webhook(url, payload))
-        
+            tasks.append(self._post_webhook(url, payload, session))
+
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
-    
-    async def _post_webhook(self, url: str, payload: WebhookPayload) -> None:
+
+    async def _post_webhook(
+        self, url: str, payload: WebhookPayload, session: aiohttp.ClientSession
+    ) -> None:
         """Post webhook to URL"""
         try:
-            async with self.session.post(
-                url,
-                json=payload.to_dict(),
-                timeout=aiohttp.ClientTimeout(total=10)
+            async with session.post(
+                url, json=payload.to_dict(), timeout=aiohttp.ClientTimeout(total=10)
             ) as response:
                 if response.status >= 300:
-                    logger.warning(
-                        f"Webhook POST to {url} returned {response.status}"
-                    )
+                    logger.warning(f"Webhook POST to {url} returned {response.status}")
         except Exception as e:
             logger.error(f"Failed to POST webhook to {url}: {str(e)}")
-    
+
     async def close(self) -> None:
         """Close session"""
         if self.session:

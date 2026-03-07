@@ -40,6 +40,14 @@ dev = [
 "Bug Tracker" = "https://github.com/ils15/aliexpress-async-api/issues"
 "Contact" = "https://ofertachina.com.br/contato"
 
+[tool.black]
+line-length = 88
+target-version = ["py38", "py39", "py310", "py311", "py312"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

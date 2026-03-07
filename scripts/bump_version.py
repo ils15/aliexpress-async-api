@@ -31,25 +31,36 @@ def format_version(major: int, minor: int, patch: int) -> str:
 
 def detect_bump_type(commit_message: str) -> str:
     """
-    Detect version bump type from commit message
+    Detect version bump type from commit message.
     Returns: 'major', 'minor', 'patch', or 'none'
+
+    Rules:
+      chore(release):          → none  (avoid infinite loop)
+      feat!: / breaking change → major
+      feat: / feat(...)        → minor
+      fix: / refactor: / perf: → patch
+      any other type           → patch
     """
-    commit_lower = commit_message.lower()
-    
+    commit_lower = commit_message.lower().strip()
+
+    # Release commits must never trigger a bump (avoid loop)
+    if commit_lower.startswith("chore(release):"):
+        return "none"
+
     # Breaking change = MAJOR
     if "breaking change" in commit_lower or "feat!" in commit_lower:
         return "major"
-    
-    # Feature = MINOR
-    if commit_lower.startswith("feat("):
+
+    # Feature = MINOR  (feat: or feat(...):)
+    if re.match(r"feat[:(]", commit_lower):
         return "minor"
-    
-    # Fix/Refactor = PATCH
-    if commit_lower.startswith("fix(") or commit_lower.startswith("refactor("):
+
+    # Fix / Refactor / Perf = PATCH  (with or without scope)
+    if re.match(r"(fix|refactor|perf)[:(]", commit_lower):
         return "patch"
-    
-    # Docs/tests = no publish
-    return "none"
+
+    # Any other conventional commit type defaults to PATCH
+    return "patch"
 
 
 def bump_version(current: str, bump_type: str) -> str:
@@ -102,15 +113,18 @@ def update_version_in_init(new_version: str) -> None:
 
 def main():
     """Main entrypoint"""
-    # Get commit message from environment (GitHub Actions)
-    commit_msg = os.environ.get("GIT_COMMIT_MESSAGE", "")
+    # Prefer explicit BUMP_TYPE from PR label (set by publish.yml).
+    # Falls back to commit-message heuristic when not provided.
+    bump_type = os.environ.get("BUMP_TYPE", "").lower().strip()
+    if bump_type not in ("major", "minor", "patch", "none"):
+        commit_msg = os.environ.get("GIT_COMMIT_MESSAGE", "")
+        bump_type = detect_bump_type(commit_msg)
     
-    # Detect bump type
-    bump_type = detect_bump_type(commit_msg)
-    
-    # Skip if no version bump needed
+    # Skip if no version bump needed (release commits avoid the loop)
     if bump_type == "none":
-        print(f"ℹ️ Skipping version bump (commit type: {commit_msg.split(':')[0]})")
+        print(f"ℹ️ Skipping version bump (commit: {commit_msg[:60]!r})")
+        with open(os.environ.get("GITHUB_OUTPUT", "/dev/null"), "a") as f:
+            f.write("should_publish=false\n")
         return
     
     # Get current version

@@ -29,3 +29,6 @@ coverage.xml
 htmlcov/
 .env
 RELEASE_FLOW.md
+
+# Copilot agents (local only — copied from copilot-agents repo)
+.github/agents/
